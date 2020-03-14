@@ -1,0 +1,104 @@
+Agendamento de Start Stop das Instâncias EC2
+
+--- CRIAR POLÍTICA IAM
+
+Politica -> Criar política
+Selecionar serviço: EC2
+Selecionar ação: Gravação
+                 StartInstances
+                 StopInstances
+Recursos específicos : Qualquer recurso do tipo instância
+Nome da Política: StartStopInstancesEC2
+
+
+--- CRIAR FUNÇÃO NA LAMBDA
+
+Criar função
+Nome da Função: LigarOtrsEC2
+Linguagem Utilizada: Node.js 12.x
+Permissões: Utilizada uma função existente : StartStopInstancesEC2
+
+Configuração:
+
+------------ CÓDIGO PARA LIGAR A INSTÂNCIA 	----------
+
+// LigarEC2Instance
+       exports.handler = (event, context, callback) => {
+    const ec2 = new AWS.EC2({ region: event.instanceRegion });
+    
+    ec2.startInstances({ InstanceIds: [event.instanceId] }).promise()
+        .then(() => callback(null, `Successfully started ${event.instanceId}`))
+        .catch(err => callback(err));
+};
+
+--- CONFIGURAÇÃO DE EVENTO - TESTE
+Nome: LigarOTRS
+
+{
+  "instanceRegion": "us-east-1",
+  "instanceId": "i-02302644daa9e97a1"
+}
+
+Salvar e testar.
+
+--------- CÓDIGO PARA DESLIGAR A INSTÂNCIA ---------
+Nome da Função: DesligarOtrsEC2
+Linguagem Utilizada: Node.js 12.x
+Permissões: Utilizada uma função existente : StartStopInstancesEC2
+
+Configuração:
+
+// DesligarEC2Instance
+
+const AWS = require('aws-sdk');
+
+exports.handler = (event, context, callback) => {
+    const ec2 = new AWS.EC2({ region: event.instanceRegion });
+    
+    ec2.stopInstances({ InstanceIds: [event.instanceId] }).promise()
+        .then(() => callback(null, `Successfully stopped ${event.instanceId}`))
+        .catch(err => callback(err));
+};
+
+--- CONFIGURAÇÃO DE EVENTO - TESTE
+Nome: DesligarOTRS
+
+{
+  "instanceRegion": "us-east-1",
+  "instanceId": "i-02302644daa9e97a1"
+}
+
+Salvar e testar.
+
+--- AGENDAMENTO PARA LIGAR E DESLIGAR A INSTÂNCIA OTRS_GRAFANA ---
+
+--- CLOUD WATCH ---
+
+Regras -> Criar regras -> Programar
+Expressão cron: 30 09 * * ? *   (Assim liga todo dia)
+Expressão cron: 30 09 ? * MON-FRI *  (Assim lig de segunda a sexta)
+Função: LigarOtrsEC2
+Configuração de entrada: Constante(Texto Json) : {   "instanceRegion": "us-east-1",   "instanceId": "i-02302644daa9e97a1" }
+Configuração de detalhes
+Nome: LigarOTRS_GRAFANA
+
+Regras -> Criar regras -> Programar
+Expressão cron: 30 20 * * ? *
+Expressão cron: 30 21 ? * MON-FRI *
+Função: DesligarOtrsEC2
+Configuração de entrada: Constante(Texto Json) : {   "instanceRegion": "us-east-1",   "instanceId": "i-02302644daa9e97a1" }
+Configuração de detalhes
+Nome: DesligarOTRS_GRAFANA
+
+
+
+
+
+
+
+
+
+
+
+
+
